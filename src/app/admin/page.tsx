@@ -153,7 +153,7 @@ export default function AdminDashboard() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Link href="/admin/vehicles/new"
+          <Link href="/admin/inventory/new"
             className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold px-4 py-2.5 rounded-xl text-sm shadow-sm transition-colors">
             <Plus className="w-4 h-4" />Add Vehicle
           </Link>
@@ -217,7 +217,7 @@ export default function AdminDashboard() {
             <h2 className="font-bold text-slate-900 mb-4">Quick Actions</h2>
             <div className="flex flex-col gap-2">
               {[
-                { href: '/admin/vehicles/new', label: 'Add New Vehicle', icon: Car, color: 'bg-indigo-600 hover:bg-indigo-700 text-white' },
+                { href: '/admin/inventory/new', label: 'Add New Vehicle', icon: Car, color: 'bg-indigo-600 hover:bg-indigo-700 text-white' },
                 { href: '/admin/auctions/new', label: 'Create Auction', icon: Gavel, color: 'bg-emerald-600 hover:bg-emerald-700 text-white' },
                 { href: '/admin/approvals', label: `Review KYC (${stats.pendingKyc})`, icon: Users, color: stats.pendingKyc > 0 ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700' },
                 { href: '/admin/deposits', label: `Approve Deposits (${stats.pendingDeposits})`, icon: DollarSign, color: stats.pendingDeposits > 0 ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700' },

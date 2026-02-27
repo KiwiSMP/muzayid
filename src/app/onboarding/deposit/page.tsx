@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { Gavel, CheckCircle2, AlertCircle, Loader2, Banknote, ArrowRight, ShieldCheck, Info, Upload, X, FileImage } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -28,12 +28,12 @@ export default function DepositPage() {
   const tier = TIERS.find(t => t.tier === selectedTier)!
 
   // Load user email for bank reference
-  useEffect(() => {
+  useState(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) setUserEmail(user.email)
     })
-  }, [])
+  })
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = e.target.files?.[0]

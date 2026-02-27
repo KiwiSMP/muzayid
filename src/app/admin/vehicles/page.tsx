@@ -107,9 +107,9 @@ export default function AdminVehiclesPage() {
                       Create Auction
                     </Link>
                   )}
-                  <Link href={`/admin/inventory`}
+                  <Link href={`/admin/vehicles/${v.id}`}
                     className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-3 py-2 rounded-lg text-center transition-colors">
-                    View in Inventory
+                    View / Edit
                   </Link>
                 </div>
               </div>
