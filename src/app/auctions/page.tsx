@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Navbar from '@/components/layout/Navbar'
 import AuctionCard from '@/components/auction/AuctionCard'
-import { Gavel, Search, SlidersHorizontal } from 'lucide-react'
+import { Gavel } from 'lucide-react'
 import type { AuctionWithVehicle } from '@/types'
 
 export const dynamic = 'force-dynamic'

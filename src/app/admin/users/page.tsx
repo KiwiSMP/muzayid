@@ -18,7 +18,7 @@ interface UserRow {
 }
 
 function TierBadge({ tier }: { tier: number }) {
-  if (tier === 0) return <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">No Tier</span>
+  if (tier === 0) return <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">No Tier</span>
   const c = ['', 'bg-amber-500/10 text-amber-400', 'bg-blue-500/10 text-blue-400', 'bg-purple-500/10 text-purple-400']
   return <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${c[tier]}`}>Tier {tier}</span>
 }
@@ -99,7 +99,7 @@ export default function AdminUsersPage() {
 
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Users & KYC</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Users & KYC</h1>
           <p className="text-slate-400 text-sm mt-1">{users.length} total users</p>
         </div>
       </div>
@@ -114,7 +114,7 @@ export default function AdminUsersPage() {
         <div className="flex gap-2">
           {(['all', 'pending_kyc', 'verified', 'unverified'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${filter === f ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${filter === f ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 hover:text-white'}`}>
               {f === 'pending_kyc' ? 'Pending KYC' : f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
@@ -123,14 +123,14 @@ export default function AdminUsersPage() {
 
       <div className="flex gap-6">
         {/* Table */}
-        <div className={`flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden ${selectedUser ? 'max-w-[55%]' : 'w-full'}`}>
+        <div className={`flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden ${selectedUser ? 'max-w-[55%]' : 'w-full'}`}>
           {loading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-20 text-slate-500">No users found</div>
           ) : (
             <table className="w-full">
-              <thead className="border-b border-slate-800">
+              <thead className="border-b border-slate-200">
                 <tr>
                   {['User', 'Phone', 'Tier', 'Deposit', 'KYC', 'Status', ''].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wide">{h}</th>
@@ -140,18 +140,18 @@ export default function AdminUsersPage() {
               <tbody className="divide-y divide-slate-800/50">
                 {filtered.map(u => (
                   <tr key={u.id} onClick={() => openUser(u)}
-                    className={`cursor-pointer transition-colors ${selectedUser?.id === u.id ? 'bg-emerald-500/5' : 'hover:bg-slate-800/50'}`}>
+                    className={`cursor-pointer transition-colors ${selectedUser?.id === u.id ? 'bg-emerald-50' : 'hover:hover:bg-slate-50'}`}>
                     <td className="px-4 py-3">
                       <p className="text-white text-sm font-medium">{u.full_name}</p>
                       <p className="text-slate-400 text-xs">{new Date(u.created_at).toLocaleDateString('en-EG', { day: 'numeric', month: 'short' })}</p>
                     </td>
-                    <td className="px-4 py-3 text-slate-300 text-sm">{u.phone_number || '—'}</td>
+                    <td className="px-4 py-3 text-slate-600 text-sm">{u.phone_number || '—'}</td>
                     <td className="px-4 py-3"><TierBadge tier={u.bidding_tier} /></td>
-                    <td className="px-4 py-3 text-slate-300 text-sm">{formatCurrency(u.deposit_balance)}</td>
+                    <td className="px-4 py-3 text-slate-600 text-sm">{formatCurrency(u.deposit_balance)}</td>
                     <td className="px-4 py-3">
                       {u.national_id_url
                         ? <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">Uploaded</span>
-                        : <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">None</span>
+                        : <span className="text-xs bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full">None</span>
                       }
                     </td>
                     <td className="px-4 py-3">
@@ -172,36 +172,36 @@ export default function AdminUsersPage() {
 
         {/* User detail panel */}
         {selectedUser && (
-          <div className="w-80 flex-shrink-0 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col gap-4 h-fit sticky top-6">
+          <div className="w-80 flex-shrink-0 bg-white border border-slate-200 rounded-xl p-5 flex flex-col gap-4 h-fit sticky top-6">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-white">User Details</h3>
               <button onClick={() => setSelectedUser(null)} className="text-slate-400 hover:text-white text-lg leading-none">✕</button>
             </div>
 
             <div className="flex flex-col gap-2.5 text-sm">
-              <div className="flex items-start gap-2"><User className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" /><div><p className="text-slate-400 text-xs">Full Name</p><p className="text-white font-medium">{selectedUser.full_name}</p></div></div>
-              <div className="flex items-start gap-2"><Phone className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" /><div><p className="text-slate-400 text-xs">Phone</p><p className="text-white font-medium">{selectedUser.phone_number || '—'}</p></div></div>
-              <div className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" /><div><p className="text-slate-400 text-xs">Deposit Balance</p><p className="text-white font-medium">{formatCurrency(selectedUser.deposit_balance)}</p></div></div>
-              <div className="flex items-start gap-2"><Filter className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" /><div><p className="text-slate-400 text-xs">Role</p><p className="text-white font-medium capitalize">{selectedUser.role}</p></div></div>
+              <div className="flex items-start gap-2"><User className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" /><div><p className="text-slate-400 text-xs">Full Name</p><p className="text-slate-900 font-medium">{selectedUser.full_name}</p></div></div>
+              <div className="flex items-start gap-2"><Phone className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" /><div><p className="text-slate-400 text-xs">Phone</p><p className="text-slate-900 font-medium">{selectedUser.phone_number || '—'}</p></div></div>
+              <div className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" /><div><p className="text-slate-400 text-xs">Deposit Balance</p><p className="text-slate-900 font-medium">{formatCurrency(selectedUser.deposit_balance)}</p></div></div>
+              <div className="flex items-start gap-2"><Filter className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" /><div><p className="text-slate-400 text-xs">Role</p><p className="text-slate-900 font-medium capitalize">{selectedUser.role}</p></div></div>
             </div>
 
             {/* National ID */}
             <div>
-              <p className="text-slate-400 text-xs font-bold uppercase mb-2">National ID</p>
+              <p className="text-xs font-bold text-slate-500 uppercase mb-2">National ID</p>
               {idImageUrl ? (
                 <a href={idImageUrl} target="_blank" rel="noopener noreferrer">
                   <img src={idImageUrl} alt="National ID" className="w-full rounded-xl border border-slate-700 object-cover max-h-40 hover:opacity-90 transition-opacity" />
                   <p className="text-xs text-blue-400 mt-1 text-center">Click to view full size</p>
                 </a>
               ) : selectedUser.national_id_url ? (
-                <div className="flex items-center justify-center py-6 bg-slate-800 rounded-xl"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+                <div className="flex items-center justify-center py-6 bg-slate-100 rounded-xl"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
               ) : (
-                <div className="flex items-center justify-center py-6 bg-slate-800 rounded-xl"><p className="text-slate-500 text-sm">No ID uploaded</p></div>
+                <div className="flex items-center justify-center py-6 bg-slate-100 rounded-xl"><p className="text-slate-500 text-sm">No ID uploaded</p></div>
               )}
             </div>
 
             {/* Actions */}
-            <div className="flex flex-col gap-2 pt-2 border-t border-slate-800">
+            <div className="flex flex-col gap-2 pt-2 border-t border-slate-200">
               {!selectedUser.is_verified ? (
                 <button onClick={() => verifyUser(selectedUser.id, true)} disabled={processing || !selectedUser.national_id_url}
                   className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
@@ -217,7 +217,7 @@ export default function AdminUsersPage() {
               )}
               {selectedUser.role !== 'admin' && (
                 <button onClick={() => setAdmin(selectedUser.id)} disabled={processing}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl text-sm transition-colors">
+                  className="w-full bg-slate-100 hover:bg-slate-100 text-slate-600 font-semibold py-2.5 rounded-xl text-sm transition-colors">
                   Make Admin
                 </button>
               )}

@@ -149,41 +149,38 @@ export default function AuctionCard({ auction }: AuctionCardProps) {
         <div className="p-4 flex flex-col flex-1">
 
           {/* Title */}
-          <h3 className="font-bold text-slate-900 text-base leading-snug mb-1">
+          <h3 className="font-bold text-slate-900 text-base leading-snug mb-2">
             {v.year} {v.make} {v.model}
           </h3>
 
-          {/* Color */}
-          {v.color && (
-            <p className="text-xs text-slate-400 mb-2 capitalize">{v.color}</p>
-          )}
-
           {/* Vehicle specs row */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 mb-3">
-            {v.odometer && (
+            {v.mileage != null && (
               <span className="flex items-center gap-1">
                 <Gauge className="w-3 h-3" />
-                {v.odometer.toLocaleString()} km
+                {v.mileage.toLocaleString()} km
               </span>
             )}
-            {v.has_keys !== undefined && (
-              <span className={`flex items-center gap-1 ${v.has_keys ? 'text-emerald-600' : 'text-red-500'}`}>
+            {v.condition_report?.keys_available !== undefined && (
+              <span className={`flex items-center gap-1 ${v.condition_report.keys_available ? 'text-emerald-600' : 'text-red-500'}`}>
                 <Key className="w-3 h-3" />
-                {v.has_keys ? 'Keys ✓' : 'No Keys'}
+                {v.condition_report.keys_available ? 'Keys ✓' : 'No Keys'}
               </span>
             )}
-            {v.run_drive !== undefined && (
-              <span className={`flex items-center gap-1 ${v.run_drive ? 'text-emerald-600' : 'text-red-500'}`}>
-                {v.run_drive ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                {v.run_drive ? 'Runs' : "Doesn't Run"}
+            {v.condition_report?.run_drive_status && (
+              <span className={`flex items-center gap-1 ${v.condition_report.run_drive_status === 'starts_drives' ? 'text-emerald-600' : v.condition_report.run_drive_status === 'engine_starts' ? 'text-amber-500' : 'text-red-500'}`}>
+                {v.condition_report.run_drive_status === 'starts_drives'
+                  ? <CheckCircle className="w-3 h-3" />
+                  : <AlertTriangle className="w-3 h-3" />}
+                {v.condition_report.run_drive_status === 'starts_drives' ? 'Runs' : v.condition_report.run_drive_status === 'engine_starts' ? 'Eng. Starts' : "Non-Runner"}
               </span>
             )}
-            {v.fines_amount && v.fines_amount > 0 ? (
+            {v.fines_cleared === false && (
               <span className="flex items-center gap-1 text-orange-500 font-semibold">
                 <AlertTriangle className="w-3 h-3" />
-                {formatCurrency(v.fines_amount)} fines
+                Fines apply
               </span>
-            ) : null}
+            )}
           </div>
 
           {/* Spacer */}

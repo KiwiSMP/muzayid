@@ -19,7 +19,7 @@ function TagInput({ label, value, onChange }: { label: string; value: string[]; 
       <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">{label}</label>
       <div className="flex flex-wrap gap-2 mb-2">
         {value.map(tag => (
-          <span key={tag} className="flex items-center gap-1 bg-slate-700 text-slate-200 text-xs px-2 py-1 rounded-lg">
+          <span key={tag} className="flex items-center gap-1 bg-slate-100 text-slate-200 text-xs px-2 py-1 rounded-lg">
             {tag}
             <button onClick={() => onChange(value.filter(t => t !== tag))} type="button"><X className="w-3 h-3 hover:text-red-400" /></button>
           </span>
@@ -28,8 +28,8 @@ function TagInput({ label, value, onChange }: { label: string; value: string[]; 
       <div className="flex gap-2">
         <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())}
           placeholder={`Add ${label.toLowerCase()}...`}
-          className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
-        <button type="button" onClick={add} className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-xl text-sm"><Plus className="w-4 h-4" /></button>
+          className="flex-1 bg-white border border-slate-700 rounded-xl px-3 py-2 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500" />
+        <button type="button" onClick={add} className="bg-slate-100 hover:bg-slate-600 text-white px-3 py-2 rounded-xl text-sm"><Plus className="w-4 h-4" /></button>
       </div>
     </div>
   )
@@ -39,8 +39,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><label className="text-xs font-bold text-slate-400 uppercase mb-1.5 block">{label}</label>{children}</div>
 }
 
-const inputCls = "w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-const selectCls = "w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-emerald-500"
+const inputCls = "w-full bg-white border border-slate-700 rounded-xl px-3 py-2.5 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+const selectCls = "w-full bg-white border border-slate-700 rounded-xl px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-indigo-500"
 
 export default function NewVehiclePage() {
   const router = useRouter()
@@ -152,7 +152,7 @@ export default function NewVehiclePage() {
     <div className="p-8 max-w-3xl">
       <div className="mb-8">
         <button onClick={() => router.back()} className="text-slate-400 hover:text-white text-sm mb-4 flex items-center gap-1">← Back</button>
-        <h1 className="text-2xl font-bold text-white">Add New Vehicle</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Add New Vehicle</h1>
       </div>
 
       {error && (
@@ -164,7 +164,7 @@ export default function NewVehiclePage() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-8">
         {/* ── Images ── */}
         <section>
-          <h2 className="text-white font-bold text-lg mb-4 pb-2 border-b border-slate-800">Photos</h2>
+          <h2 className="text-white font-bold text-lg mb-4 pb-2 border-b border-slate-200">Photos</h2>
           <div
             onClick={() => fileInputRef.current?.click()}
             onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files) }}
@@ -194,7 +194,7 @@ export default function NewVehiclePage() {
 
         {/* ── Basic Info ── */}
         <section>
-          <h2 className="text-white font-bold text-lg mb-4 pb-2 border-b border-slate-800">Vehicle Details</h2>
+          <h2 className="text-white font-bold text-lg mb-4 pb-2 border-b border-slate-200">Vehicle Details</h2>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Make *"><input required value={form.make} onChange={e => set('make', e.target.value)} placeholder="Toyota" className={inputCls} /></Field>
             <Field label="Model *"><input required value={form.model} onChange={e => set('model', e.target.value)} placeholder="Corolla" className={inputCls} /></Field>
@@ -221,7 +221,7 @@ export default function NewVehiclePage() {
 
         {/* ── Condition Report ── */}
         <section>
-          <h2 className="text-white font-bold text-lg mb-4 pb-2 border-b border-slate-800">Condition Report (Brutal Transparency)</h2>
+          <h2 className="text-white font-bold text-lg mb-4 pb-2 border-b border-slate-200">Condition Report (Brutal Transparency)</h2>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <Field label="Primary Damage"><input value={cr.primary_damage} onChange={e => setCrField('primary_damage', e.target.value)} placeholder="e.g. Front end smash" className={inputCls} /></Field>
             <Field label="Secondary Damage"><input value={cr.secondary_damage} onChange={e => setCrField('secondary_damage', e.target.value)} placeholder="e.g. Left side swipe" className={inputCls} /></Field>

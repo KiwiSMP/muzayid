@@ -18,15 +18,14 @@ const cairo = Cairo({
 })
 
 export const metadata: Metadata = {
-  title: 'مزايد · Muzayid — Egypt\'s Auto Auction Platform',
-  description: 'Real-time bidding on salvage, crash-damaged, and corporate fleet vehicles in Egypt. مزادات السيارات في مصر.',
-  keywords: ['car auction', 'Egypt', 'salvage cars', 'مزاد سيارات', 'مصر', 'سيارات متضررة'],
+  title: "مزايد · Muzayid — Egypt's Auto Auction Platform",
+  description: 'Real-time bidding on salvage, crash-damaged, and corporate fleet vehicles in Egypt.',
+  keywords: ['car auction', 'Egypt', 'salvage cars', 'مزاد سيارات', 'مصر'],
   openGraph: {
-    title: 'Muzayid · مزايد — Egypt\'s Auto Auction Platform',
+    title: "Muzayid · مزايد — Egypt's Auto Auction Platform",
     description: 'Real-time car auctions in Egypt. 100% transparent.',
     type: 'website',
     locale: 'ar_EG',
-    alternateLocale: 'en_US',
   },
 }
 

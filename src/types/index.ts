@@ -4,17 +4,27 @@ export interface Vehicle {
   model: string
   year: number
   color?: string
-  odometer?: number
+  mileage: number
   damage_type?: string
-  run_drive?: boolean
-  has_keys?: boolean
-  fines_amount?: number
+  fines_cleared?: boolean
   images?: string[]
+  description?: string
   condition_report?: {
     reserve_price?: number
-    exterior?: string
-    interior?: string
-    mechanical?: string
+    run_drive_status?: 'starts_drives' | 'engine_starts' | 'non_runner'
+    odometer_actual?: boolean
+    keys_available?: boolean
+    chassis_number?: string
+    license_status?: 'active' | 'expired' | 'cancelled'
+    location?: string
+    lot_number?: string
+    lane?: string
+    primary_damage?: string
+    secondary_damage?: string
+    exterior?: string[]
+    interior?: string[]
+    mechanical?: string[]
+    missing_parts?: string[]
     notes?: string
   }
   status?: string
@@ -32,6 +42,7 @@ export interface Auction {
   lot_number?: string
   entry_fee?: number
   created_at: string
+  reserve_price?: number
 }
 
 export interface AuctionWithVehicle extends Auction {

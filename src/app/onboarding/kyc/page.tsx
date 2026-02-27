@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   Gavel, Upload, CheckCircle2, AlertCircle,
@@ -10,7 +9,6 @@ import {
 import { createClient } from '@/lib/supabase/client'
 
 export default function KYCPage() {
-  const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [file, setFile] = useState<File | null>(null)

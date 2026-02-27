@@ -112,7 +112,7 @@ export default function Navbar({ initialUser }: NavbarProps) {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 flex-shrink-0">
             <div className="w-9 h-9 bg-[#1E3A5F] rounded-xl flex items-center justify-center shadow-sm">
-              <Gavel className="w-4.5 h-4.5 text-white w-[18px] h-[18px]" />
+              <Gavel className="w-[18px] h-[18px] text-white" />
             </div>
             <div className="flex flex-col leading-none">
               <span className="font-black text-[#1E3A5F] text-base tracking-tight">مزايد</span>
@@ -155,7 +155,7 @@ export default function Navbar({ initialUser }: NavbarProps) {
                   >
                     <Bell className="w-5 h-5" />
                     {unreadCount > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center min-w-[18px] min-h-[18px]">
+                      <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center min-w-[18px] min-h-[18px] px-0.5">
                         {unreadCount > 9 ? '9+' : unreadCount}
                       </span>
                     )}
