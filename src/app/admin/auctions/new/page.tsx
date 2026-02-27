@@ -23,14 +23,26 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   )
 }
 
-// Convert local datetime-local string to ISO
 function toISO(local: string) { return local ? new Date(local).toISOString() : '' }
 
-// Get today's datetime-local formatted value
 function nowLocal() {
   const now = new Date()
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
   return now.toISOString().slice(0, 16)
+}
+
+function formatDuration(startStr: string, endStr: string): string {
+  const diffMs = new Date(endStr).getTime() - new Date(startStr).getTime()
+  if (diffMs <= 0) return ''
+  const totalMinutes = Math.floor(diffMs / 60000)
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const minutes = totalMinutes % 60
+  const parts: string[] = []
+  if (days > 0) parts.push(`${days} day${days !== 1 ? 's' : ''}`)
+  if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`)
+  if (minutes > 0 && days === 0) parts.push(`${minutes} min`)
+  return parts.join(' ')
 }
 
 function CreateAuctionForm() {
@@ -58,9 +70,16 @@ function CreateAuctionForm() {
     async function load() {
       const supabase = createClient()
       const { data: vData } = await supabase.from('vehicles').select('*').eq('status', 'approved').order('created_at', { ascending: false })
-      const { data: aData } = await supabase.from('auctions').select('vehicle_id')
-      const auctionedIds = new Set((aData || []).map((a: { vehicle_id: string }) => a.vehicle_id))
-      setVehicles(((vData || []) as Vehicle[]).filter(v => !auctionedIds.has(v.id)))
+      // Only exclude vehicles with ACTIVE auctions (not ended/cancelled/settled ones)
+      const { data: aData } = await supabase.from('auctions').select('vehicle_id, status')
+      const activeAuctionIds = new Set(
+        (aData || [])
+          .filter((a: { vehicle_id: string; status: string }) => ['active', 'upcoming', 'draft'].includes(a.status))
+          .map((a: { vehicle_id: string }) => a.vehicle_id)
+      )
+      const available = ((vData || []) as Vehicle[]).filter(v => !activeAuctionIds.has(v.id))
+      setVehicles(available)
+      // If preselected vehicle isn't in available list, still allow it (might have ended auction)
       setLoading(false)
     }
     load()
@@ -78,6 +97,21 @@ function CreateAuctionForm() {
 
     setSubmitting(true); setError('')
     const supabase = createClient()
+
+    // Check if there's already an active/draft auction for this vehicle
+    const { data: existing } = await supabase
+      .from('auctions')
+      .select('id, status')
+      .eq('vehicle_id', selectedId)
+      .in('status', ['active', 'upcoming', 'draft'])
+      .maybeSingle()
+
+    if (existing) {
+      setError(`This vehicle already has a ${existing.status} auction. End or cancel it first before creating a new one.`)
+      setSubmitting(false)
+      return
+    }
+
     const { error: err } = await supabase.from('auctions').insert({
       vehicle_id: selectedId,
       start_time: toISO(form.start_time),
@@ -87,7 +121,16 @@ function CreateAuctionForm() {
       current_highest_bid: 0,
       status: form.status,
     })
-    if (err) { setError(err.message); setSubmitting(false); return }
+    if (err) {
+      // Handle the unique constraint violation with a clear message
+      if (err.message.includes('unique') || err.message.includes('duplicate')) {
+        setError('This vehicle already has an auction. Go to Live Control to manage or cancel the existing auction first.')
+      } else {
+        setError(err.message)
+      }
+      setSubmitting(false)
+      return
+    }
     setDone(true)
     setTimeout(() => router.push('/admin/live-control'), 1500)
   }
@@ -113,8 +156,8 @@ function CreateAuctionForm() {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-6 text-sm">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-6 text-sm">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
         </div>
       )}
 
@@ -131,7 +174,7 @@ function CreateAuctionForm() {
             <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-200">
               <Car className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="font-semibold text-slate-500 text-sm">No vehicles ready to auction</p>
-              <p className="text-slate-400 text-xs mt-1">Add approved vehicles in Inventory first</p>
+              <p className="text-slate-400 text-xs mt-1">Add approved vehicles in Inventory first, or end existing auctions</p>
               <button type="button" onClick={() => router.push('/admin/inventory')}
                 className="mt-3 bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors">
                 Go to Inventory
@@ -160,11 +203,10 @@ function CreateAuctionForm() {
             </div>
           )}
 
-          {/* Reserve price note */}
           {selected && reservePrice && (
             <div className="mt-3 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl px-3 py-2.5 text-sm">
               <DollarSign className="w-4 h-4 flex-shrink-0" />
-              <span>This vehicle has a reserve price of <strong>{Number(reservePrice).toLocaleString('en-EG')} EGP</strong> set on the vehicle record.</span>
+              <span>This vehicle has a reserve of <strong>{Number(reservePrice).toLocaleString('en-EG')} EGP</strong>.</span>
             </div>
           )}
         </div>
@@ -189,7 +231,7 @@ function CreateAuctionForm() {
           {form.start_time && form.end_time && new Date(form.end_time) > new Date(form.start_time) && (
             <div className="mt-3 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600">
               <Clock className="w-4 h-4 text-slate-400" />
-              Duration: {Math.round((new Date(form.end_time).getTime() - new Date(form.start_time).getTime()) / 3600000 * 10) / 10} hours
+              Duration: <span className="font-semibold ml-1">{formatDuration(form.start_time, form.end_time)}</span>
             </div>
           )}
         </div>
@@ -216,7 +258,7 @@ function CreateAuctionForm() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { value: 'draft', label: 'Draft', desc: 'Visible for preview & pre-bidding. Not live yet.', icon: Clock },
+              { value: 'draft', label: 'Draft', desc: 'Visible for preview. Not live yet.', icon: Clock },
               { value: 'active', label: 'Go Live Now', desc: 'Opens immediately for live bidding.', icon: Gavel },
             ].map(s => {
               const Icon = s.icon

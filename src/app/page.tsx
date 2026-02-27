@@ -25,7 +25,7 @@ async function getData() {
       supabase
         .from('auctions')
         .select('*, vehicle:vehicles (*)')
-        .in('status', ['active', 'upcoming'])
+        .in('status', ['active', 'upcoming', 'draft'])
         .order('status', { ascending: false }) // active first
         .order('end_time', { ascending: true })
         .limit(12),

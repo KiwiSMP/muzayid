@@ -22,8 +22,8 @@ async function getAuctions(status?: string, damage?: string): Promise<AuctionWit
       .order('end_time', { ascending: true })
 
     if (status === 'active') query = query.eq('status', 'active')
-    else if (status === 'upcoming') query = query.eq('status', 'draft')
-    else query = query.in('status', ['active', 'draft'])
+    else if (status === 'upcoming') query = query.in('status', ['upcoming', 'draft'])
+    else query = query.in('status', ['active', 'upcoming', 'draft'])
 
     const { data } = await query
     let results = (data || []) as AuctionWithVehicle[]

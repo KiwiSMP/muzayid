@@ -4,17 +4,34 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
-  Plus, Car, Upload, X, Loader2, CheckCircle2, AlertCircle,
-  Gavel, Eye, CloudUpload, Tag, Wrench, MapPin, Hash, Key,
-  Gauge, FileText, ShieldCheck
+  Plus, Car, X, Loader2, CheckCircle2, AlertCircle,
+  Gavel, Eye, CloudUpload, Wrench, ChevronLeft, Trash2
 } from 'lucide-react'
 
 interface Vehicle {
   id: string; make: string; model: string; year: number
   damage_type: string; mileage: number; status: string
   images: string[]; fines_cleared: boolean; created_at: string
+  description?: string
   has_auction?: boolean
-  condition_report: { reserve_price?: number; run_drive_status?: string }
+  condition_report: {
+    reserve_price?: number
+    run_drive_status?: string
+    odometer_actual?: boolean
+    keys_available?: boolean
+    chassis_number?: string
+    license_status?: string
+    location?: string
+    lot_number?: string
+    lane?: string
+    primary_damage?: string
+    secondary_damage?: string
+    exterior?: string[]
+    interior?: string[]
+    mechanical?: string[]
+    missing_parts?: string[]
+    notes?: string
+  }
 }
 
 const DAMAGE_LABELS: Record<string, string> = {
@@ -80,6 +97,161 @@ function TagInput({ label, placeholder, value, onChange }: { label: string; plac
   )
 }
 
+// ── VEHICLE DETAIL MODAL ─────────────────────────────────────
+function VehicleModal({ vehicle, onClose, onDeleted, onAuction }: {
+  vehicle: Vehicle
+  onClose: () => void
+  onDeleted: () => void
+  onAuction: (id: string) => void
+}) {
+  const [imgIndex, setImgIndex] = useState(0)
+  const [deleting, setDeleting] = useState(false)
+  const images = vehicle.images?.filter(Boolean) || []
+  const cr = vehicle.condition_report || {}
+
+  async function handleDelete() {
+    if (!confirm(`Delete ${vehicle.year} ${vehicle.make} ${vehicle.model}? This cannot be undone.`)) return
+    setDeleting(true)
+    const supabase = createClient()
+    const { error } = await supabase.from('vehicles').delete().eq('id', vehicle.id)
+    if (error) { alert('Delete failed: ' + error.message); setDeleting(false); return }
+    onClose()
+    onDeleted()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white z-10">
+          <div>
+            <h2 className="font-black text-slate-900 text-lg">{vehicle.year} {vehicle.make} {vehicle.model}</h2>
+            <p className="text-slate-400 text-sm">{DAMAGE_LABELS[vehicle.damage_type] || vehicle.damage_type}</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 flex flex-col gap-5">
+          {/* Images */}
+          {images.length > 0 ? (
+            <div>
+              <div className="relative aspect-video bg-slate-100 rounded-xl overflow-hidden mb-2">
+                <img src={images[imgIndex]} alt="" className="w-full h-full object-cover" />
+                {images.length > 1 && (
+                  <>
+                    <button onClick={() => setImgIndex(i => Math.max(0, i - 1))}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-8 h-8 rounded-full flex items-center justify-center">
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => setImgIndex(i => Math.min(images.length - 1, i + 1))}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-8 h-8 rounded-full flex items-center justify-center">
+                      <ChevronLeft className="w-4 h-4 rotate-180" />
+                    </button>
+                    <span className="absolute bottom-2 right-2 bg-black/60 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                      {imgIndex + 1} / {images.length}
+                    </span>
+                  </>
+                )}
+              </div>
+              {images.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {images.map((img, i) => (
+                    <button key={i} onClick={() => setImgIndex(i)}
+                      className={`flex-shrink-0 w-14 h-10 rounded-lg overflow-hidden border-2 transition-all ${i === imgIndex ? 'border-indigo-500' : 'border-slate-200'}`}>
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="aspect-video bg-slate-100 rounded-xl flex items-center justify-center text-slate-300">No images</div>
+          )}
+
+          {/* Info grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {[
+              { label: 'Odometer', value: `${vehicle.mileage?.toLocaleString()} km` },
+              { label: 'Status', value: vehicle.status },
+              { label: 'Fines', value: vehicle.fines_cleared ? '✓ Cleared' : '⚠ Buyer pays' },
+              { label: 'Keys', value: cr.keys_available !== false ? '✓ Present' : '✕ Missing' },
+              { label: 'Run/Drive', value: cr.run_drive_status === 'starts_drives' ? '✓ Starts & Drives' : cr.run_drive_status === 'engine_starts' ? '⚠ Engine Starts' : cr.run_drive_status === 'non_runner' ? '✕ Non-Runner' : '—' },
+              { label: 'Reserve Price', value: cr.reserve_price ? `${Number(cr.reserve_price).toLocaleString()} EGP` : 'None' },
+              { label: 'Odometer Reading', value: cr.odometer_actual !== false ? '✓ Actual' : '⚠ Not actual' },
+              { label: 'License', value: cr.license_status || '—' },
+              { label: 'Lot #', value: cr.lot_number || '—' },
+              { label: 'Lane', value: cr.lane || '—' },
+              { label: 'Location', value: cr.location || '—' },
+              { label: 'Chassis/VIN', value: cr.chassis_number || '—' },
+            ].map(({ label, value }) => (
+              <div key={label} className="bg-slate-50 rounded-xl p-3">
+                <p className="text-xs text-slate-400 font-medium mb-0.5">{label}</p>
+                <p className="text-sm font-semibold text-slate-800 break-words">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Damage detail */}
+          {(cr.primary_damage || cr.secondary_damage) && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <p className="text-xs font-bold text-red-700 uppercase tracking-wide mb-2">Damage Details</p>
+              {cr.primary_damage && <p className="text-sm text-red-800"><span className="font-semibold">Primary:</span> {cr.primary_damage}</p>}
+              {cr.secondary_damage && <p className="text-sm text-red-800 mt-1"><span className="font-semibold">Secondary:</span> {cr.secondary_damage}</p>}
+            </div>
+          )}
+
+          {/* Tag lists */}
+          {(['exterior', 'interior', 'mechanical', 'missing_parts'] as const).map(key => {
+            const items = cr[key]
+            if (!items?.length) return null
+            return (
+              <div key={key}>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 capitalize">{key.replace('_', ' ')} Issues</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {items.map((item: string) => (
+                    <span key={item} className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full font-medium">{item}</span>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+
+          {cr.notes && (
+            <div className="bg-slate-50 rounded-xl p-4">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Inspector Notes</p>
+              <p className="text-sm text-slate-700 leading-relaxed">{cr.notes}</p>
+            </div>
+          )}
+
+          {vehicle.description && (
+            <div className="bg-slate-50 rounded-xl p-4">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Description</p>
+              <p className="text-sm text-slate-700 leading-relaxed">{vehicle.description}</p>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2 border-t border-slate-200">
+            {!vehicle.has_auction && vehicle.status === 'approved' && (
+              <button onClick={() => { onAuction(vehicle.id); onClose() }}
+                className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-sm transition-colors">
+                <Gavel className="w-4 h-4" />Create Auction
+              </button>
+            )}
+            <button onClick={handleDelete} disabled={deleting}
+              className="flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-3 px-5 rounded-xl text-sm transition-colors disabled:opacity-50">
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Delete Vehicle
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── ADD VEHICLE FORM ─────────────────────────────────────────
 function AddVehicleForm({ onDone }: { onDone: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null)
@@ -96,7 +268,7 @@ function AddVehicleForm({ onDone }: { onDone: () => void }) {
     primary_damage: '', secondary_damage: '', run_drive_status: 'starts_drives',
     odometer_actual: true, keys_available: true, chassis_number: '',
     license_status: 'active', location: '', lot_number: '', lane: '',
-    reserve_price: '', // per-vehicle reserve
+    reserve_price: '',
     exterior: [] as string[], interior: [] as string[],
     mechanical: [] as string[], missing_parts: [] as string[], notes: '',
   })
@@ -162,7 +334,6 @@ function AddVehicleForm({ onDone }: { onDone: () => void }) {
         </div>
       )}
 
-      {/* Photos */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
         <SectionHeader icon={CloudUpload} title="Vehicle Photos" sub="First image will be the main thumbnail" />
         <div
@@ -192,7 +363,6 @@ function AddVehicleForm({ onDone }: { onDone: () => void }) {
         )}
       </div>
 
-      {/* Basic info */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
         <SectionHeader icon={Car} title="Vehicle Details" />
         <div className="grid grid-cols-2 gap-4">
@@ -214,7 +384,7 @@ function AddVehicleForm({ onDone }: { onDone: () => void }) {
               <option value="false">⚠ Buyer Assumes All Fines</option>
             </select>
           </Field>
-          <Field label="Reserve Price (EGP)" hint="Hidden minimum price for this vehicle — leave blank for no reserve">
+          <Field label="Reserve Price (EGP)" hint="Leave blank for no reserve">
             <div className="relative"><input type="number" min={0} value={cr.reserve_price} onChange={e => setCF('reserve_price', e.target.value)} placeholder="Optional" className={inp + ' pr-12'} />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">EGP</span></div>
           </Field>
@@ -226,9 +396,8 @@ function AddVehicleForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      {/* Condition Report */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <SectionHeader icon={Wrench} title="Condition Report" sub="Brutal Transparency — all fields visible to buyers" />
+        <SectionHeader icon={Wrench} title="Condition Report" sub="All fields visible to buyers" />
         <div className="grid grid-cols-2 gap-4 mb-5">
           <Field label="Primary Damage"><input value={cr.primary_damage} onChange={e => setCF('primary_damage', e.target.value)} placeholder="e.g. Front end smash" className={inp} /></Field>
           <Field label="Secondary Damage"><input value={cr.secondary_damage} onChange={e => setCF('secondary_damage', e.target.value)} placeholder="e.g. Left side swipe" className={inp} /></Field>
@@ -260,18 +429,10 @@ function AddVehicleForm({ onDone }: { onDone: () => void }) {
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-4 mb-5">
-          <Field label="Chassis / VIN" hint="Buyers use this for background checks">
-            <input value={cr.chassis_number} onChange={e => setCF('chassis_number', e.target.value)} placeholder="JTDBU4EE9A0123456" className={inp + ' font-mono tracking-wider'} />
-          </Field>
-          <Field label="Current Location" hint="For buyer towing cost calculation">
-            <input value={cr.location} onChange={e => setCF('location', e.target.value)} placeholder="15th of May City Storage Lot" className={inp} />
-          </Field>
-          <Field label="Lot / Run Number" hint="Buyers estimate their car's time slot">
-            <input value={cr.lot_number} onChange={e => setCF('lot_number', e.target.value)} placeholder="45" className={inp} />
-          </Field>
-          <Field label="Lane / Ring">
-            <input value={cr.lane} onChange={e => setCF('lane', e.target.value)} placeholder="Lane A" className={inp} />
-          </Field>
+          <Field label="Chassis / VIN"><input value={cr.chassis_number} onChange={e => setCF('chassis_number', e.target.value)} placeholder="JTDBU4EE9A0123456" className={inp + ' font-mono tracking-wider'} /></Field>
+          <Field label="Current Location"><input value={cr.location} onChange={e => setCF('location', e.target.value)} placeholder="15th of May City Storage Lot" className={inp} /></Field>
+          <Field label="Lot / Run Number"><input value={cr.lot_number} onChange={e => setCF('lot_number', e.target.value)} placeholder="45" className={inp} /></Field>
+          <Field label="Lane / Ring"><input value={cr.lane} onChange={e => setCF('lane', e.target.value)} placeholder="Lane A" className={inp} /></Field>
         </div>
         <div className="flex flex-col gap-4">
           <TagInput label="Exterior Damage Items" placeholder="e.g. Cracked windshield" value={cr.exterior} onChange={v => setCF('exterior', v)} />
@@ -299,19 +460,35 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'list' | 'add'>('list')
   const [filter, setFilter] = useState('all')
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   async function load() {
     const supabase = createClient()
     const { data: vData } = await supabase.from('vehicles').select('*').order('created_at', { ascending: false })
-    const { data: aData } = await supabase.from('auctions').select('vehicle_id')
-    const auctionedIds = new Set((aData || []).map((a: { vehicle_id: string }) => a.vehicle_id))
-    setVehicles(((vData || []) as Vehicle[]).map(v => ({ ...v, has_auction: auctionedIds.has(v.id) })))
+    const { data: aData } = await supabase.from('auctions').select('vehicle_id, status')
+    // Only block re-auctioning if there's an active/upcoming/draft auction — ended/settled/cancelled can be re-auctioned
+    const activeAuctionIds = new Set(
+      (aData || [])
+        .filter((a: { vehicle_id: string; status: string }) => ['active', 'upcoming', 'draft'].includes(a.status))
+        .map((a: { vehicle_id: string }) => a.vehicle_id)
+    )
+    setVehicles(((vData || []) as Vehicle[]).map(v => ({ ...v, has_auction: activeAuctionIds.has(v.id) })))
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
   function handleDone() { load(); setView('list') }
+
+  async function handleDeleteInline(v: Vehicle) {
+    if (!confirm(`Delete ${v.year} ${v.make} ${v.model}? This cannot be undone.`)) return
+    setDeleting(v.id)
+    const supabase = createClient()
+    await supabase.from('vehicles').delete().eq('id', v.id)
+    setDeleting(null)
+    load()
+  }
 
   const filtered = vehicles.filter(v => {
     if (filter === 'ready') return v.status === 'approved' && !v.has_auction
@@ -321,21 +498,26 @@ export default function InventoryPage() {
 
   if (view === 'add') return (
     <div className="p-8 max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => setView('list')} className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900 text-sm font-medium transition-colors">
-          ← Back to Inventory
-        </button>
-      </div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Add New Vehicle</h1>
-        <p className="text-slate-500 text-sm mt-1">All information is visible to buyers on the auction page</p>
-      </div>
+      <button onClick={() => setView('list')} className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900 text-sm font-medium mb-6 transition-colors">
+        ← Back to Inventory
+      </button>
+      <h1 className="text-2xl font-bold text-slate-900 mb-1">Add New Vehicle</h1>
+      <p className="text-slate-500 text-sm mb-6">All information is visible to buyers on the auction page</p>
       <AddVehicleForm onDone={handleDone} />
     </div>
   )
 
   return (
     <div className="p-8">
+      {selectedVehicle && (
+        <VehicleModal
+          vehicle={selectedVehicle}
+          onClose={() => setSelectedVehicle(null)}
+          onDeleted={() => { setSelectedVehicle(null); load() }}
+          onAuction={(id) => router.push(`/admin/auctions/new?vehicle=${id}`)}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
@@ -421,10 +603,14 @@ export default function InventoryPage() {
                           <Gavel className="w-3 h-3" />Auction
                         </button>
                       )}
-                      <a href={`/admin/inventory/${v.id}`}
+                      <button onClick={() => setSelectedVehicle(v)}
                         className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors">
                         <Eye className="w-3 h-3" />View
-                      </a>
+                      </button>
+                      <button onClick={() => handleDeleteInline(v)} disabled={deleting === v.id}
+                        className="flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-40">
+                        {deleting === v.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}Delete
+                      </button>
                     </div>
                   </td>
                 </tr>

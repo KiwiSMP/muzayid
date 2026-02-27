@@ -94,3 +94,25 @@ SELECT
 FROM auth.users au
 WHERE NOT EXISTS (SELECT 1 FROM public.users pu WHERE pu.id = au.id)
 ON CONFLICT (id) DO NOTHING;
+
+-- Fix RLS so draft auctions are visible (needed for homepage/auctions page)
+DROP POLICY IF EXISTS "auctions_select_public" ON public.auctions;
+CREATE POLICY "auctions_select_public" ON public.auctions
+  FOR SELECT TO anon, authenticated
+  USING (status IN ('active', 'upcoming', 'draft', 'ended', 'settled'));
+
+-- Fix platform stats: total_vehicles = vehicles that have an active/draft auction
+CREATE OR REPLACE FUNCTION public.get_platform_stats()
+RETURNS JSON AS $$
+DECLARE
+  result JSON;
+BEGIN
+  SELECT json_build_object(
+    'live_count', (SELECT COUNT(*) FROM auctions WHERE status = 'active'),
+    'total_vehicles', (SELECT COUNT(*) FROM vehicles WHERE status = 'approved'),
+    'active_bidders', (SELECT COUNT(DISTINCT bidder_id) FROM bids
+                       WHERE created_at > NOW() - INTERVAL '30 days')
+  ) INTO result;
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
