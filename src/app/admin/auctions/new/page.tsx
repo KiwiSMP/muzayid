@@ -244,8 +244,17 @@ function CreateAuctionForm() {
           </div>
           <Field label="Starting Price (EGP)" hint="Minimum opening bid for this auction">
             <div className="relative">
-              <input type="number" required min={0} value={form.starting_price} onChange={e => setF('starting_price', e.target.value)} placeholder="5,000" className={inp + ' pr-12'} />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">EGP</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9,]*"
+                required
+                value={form.starting_price}
+                onChange={e => setF('starting_price', e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="e.g. 5000"
+                className={inp + ' pr-14'}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium pointer-events-none">EGP</span>
             </div>
           </Field>
         </div>

@@ -116,3 +116,216 @@ BEGIN
   RETURN result;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ══════════════════════════════════════════════════════════════
+-- NOTIFICATION PREFERENCE COLUMNS (add to existing users table)
+-- ══════════════════════════════════════════════════════════════
+
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN DEFAULT TRUE,
+  ADD COLUMN IF NOT EXISTS notif_new_car BOOLEAN DEFAULT TRUE,
+  ADD COLUMN IF NOT EXISTS notif_outbid BOOLEAN DEFAULT TRUE,
+  ADD COLUMN IF NOT EXISTS preferred_lang TEXT DEFAULT 'en' CHECK (preferred_lang IN ('en', 'ar'));
+
+-- ══════════════════════════════════════════════════════════════
+-- CATALOG AUCTIONS (Copart-style sequential bidding)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.auction_catalogs (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title           TEXT NOT NULL,
+  description     TEXT,
+  status          TEXT DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'active', 'ended')),
+  scheduled_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  bid_increment   INTEGER NOT NULL DEFAULT 500,   -- EGP
+  current_lot_order INTEGER NOT NULL DEFAULT 1,
+  created_by      UUID REFERENCES auth.users(id),
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.catalog_lots (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  catalog_id          UUID NOT NULL REFERENCES public.auction_catalogs(id) ON DELETE CASCADE,
+  vehicle_id          UUID NOT NULL REFERENCES public.vehicles(id),
+  lot_order           INTEGER NOT NULL,
+  status              TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'sold', 'passed', 'no_sale')),
+  starting_price      NUMERIC(12,2) NOT NULL DEFAULT 1000,
+  current_bid         NUMERIC(12,2) NOT NULL DEFAULT 0,
+  highest_bidder_id   UUID REFERENCES auth.users(id),
+  highest_bidder_name TEXT,
+  end_time            TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(catalog_id, lot_order)
+);
+
+CREATE TABLE IF NOT EXISTS public.catalog_bids (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  catalog_id  UUID NOT NULL REFERENCES public.auction_catalogs(id) ON DELETE CASCADE,
+  lot_id      UUID NOT NULL REFERENCES public.catalog_lots(id) ON DELETE CASCADE,
+  bidder_id   UUID NOT NULL REFERENCES auth.users(id),
+  amount      NUMERIC(12,2) NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS catalog_lots_catalog_id_idx ON public.catalog_lots(catalog_id);
+CREATE INDEX IF NOT EXISTS catalog_bids_lot_id_idx ON public.catalog_bids(lot_id);
+CREATE INDEX IF NOT EXISTS catalog_bids_catalog_id_idx ON public.catalog_bids(catalog_id);
+
+-- Auto-update highest bid on catalog_lots when a catalog_bid is inserted
+CREATE OR REPLACE FUNCTION public.handle_catalog_bid()
+RETURNS TRIGGER AS $$
+DECLARE
+  bidder_name TEXT;
+BEGIN
+  -- Get bidder's name
+  SELECT full_name INTO bidder_name FROM public.users WHERE id = NEW.bidder_id;
+
+  -- Update catalog_lots if this is the new highest bid
+  UPDATE public.catalog_lots
+  SET
+    current_bid = NEW.amount,
+    highest_bidder_id = NEW.bidder_id,
+    highest_bidder_name = bidder_name,
+    updated_at = NOW()
+  WHERE id = NEW.lot_id AND NEW.amount > current_bid;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_catalog_bid_insert ON public.catalog_bids;
+CREATE TRIGGER on_catalog_bid_insert
+  AFTER INSERT ON public.catalog_bids
+  FOR EACH ROW EXECUTE FUNCTION public.handle_catalog_bid();
+
+-- RLS
+ALTER TABLE public.auction_catalogs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.catalog_lots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.catalog_bids ENABLE ROW LEVEL SECURITY;
+
+-- Public read on catalogs and lots
+CREATE POLICY "catalog_select_public" ON public.auction_catalogs
+  FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "catalog_lots_select_public" ON public.catalog_lots
+  FOR SELECT TO anon, authenticated USING (true);
+
+-- Admin full access
+CREATE POLICY "catalog_admin_all" ON public.auction_catalogs
+  FOR ALL TO authenticated
+  USING ((SELECT is_admin FROM public.users WHERE id = auth.uid()) = true)
+  WITH CHECK ((SELECT is_admin FROM public.users WHERE id = auth.uid()) = true);
+CREATE POLICY "catalog_lots_admin_all" ON public.catalog_lots
+  FOR ALL TO authenticated
+  USING ((SELECT is_admin FROM public.users WHERE id = auth.uid()) = true)
+  WITH CHECK ((SELECT is_admin FROM public.users WHERE id = auth.uid()) = true);
+
+-- Bids: authenticated can select and insert their own
+CREATE POLICY "catalog_bids_select" ON public.catalog_bids
+  FOR SELECT TO authenticated USING (true);
+CREATE POLICY "catalog_bids_insert" ON public.catalog_bids
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = bidder_id);
+
+-- Enable Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE public.auction_catalogs;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.catalog_lots;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.catalog_bids;
+
+-- ─────────────────────────────────────────────────────────────────
+-- CATALOG AUCTIONS (Copart-style sequential live bidding)
+-- ─────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.auction_catalogs (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title           TEXT NOT NULL,
+  description     TEXT,
+  status          TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'active', 'ended')),
+  scheduled_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  current_lot_order INT NOT NULL DEFAULT 1,
+  bid_increment   INT NOT NULL DEFAULT 500,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.catalog_lots (
+  id                  UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  catalog_id          UUID REFERENCES public.auction_catalogs(id) ON DELETE CASCADE,
+  vehicle_id          UUID REFERENCES public.vehicles(id) ON DELETE CASCADE,
+  lot_order           INT NOT NULL,
+  status              TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'sold', 'passed', 'no_sale')),
+  starting_price      NUMERIC(12,2) NOT NULL DEFAULT 0,
+  current_bid         NUMERIC(12,2) NOT NULL DEFAULT 0,
+  highest_bidder_id   UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  highest_bidder_name TEXT,
+  end_time            TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.catalog_bids (
+  id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  lot_id     UUID REFERENCES public.catalog_lots(id) ON DELETE CASCADE,
+  catalog_id UUID REFERENCES public.auction_catalogs(id) ON DELETE CASCADE,
+  bidder_id  UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  amount     NUMERIC(12,2) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Trigger: update catalog_lots.current_bid and highest_bidder on new catalog bid
+CREATE OR REPLACE FUNCTION public.handle_catalog_bid()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.catalog_lots
+  SET current_bid = NEW.amount,
+      highest_bidder_id = NEW.bidder_id,
+      highest_bidder_name = (SELECT full_name FROM public.users WHERE id = NEW.bidder_id)
+  WHERE id = NEW.lot_id AND NEW.amount > current_bid;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_catalog_bid ON public.catalog_bids;
+CREATE TRIGGER on_catalog_bid
+  AFTER INSERT ON public.catalog_bids
+  FOR EACH ROW EXECUTE FUNCTION public.handle_catalog_bid();
+
+-- RLS for catalog tables
+ALTER TABLE public.auction_catalogs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.catalog_lots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.catalog_bids ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "catalog_select_public" ON public.auction_catalogs FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "catalog_lots_select_public" ON public.catalog_lots FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "catalog_bids_select_authenticated" ON public.catalog_bids FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "catalog_insert_admin" ON public.auction_catalogs FOR INSERT TO authenticated
+  WITH CHECK ((SELECT is_admin FROM public.users WHERE id = auth.uid()));
+CREATE POLICY "catalog_update_admin" ON public.auction_catalogs FOR UPDATE TO authenticated
+  USING ((SELECT is_admin FROM public.users WHERE id = auth.uid()));
+CREATE POLICY "catalog_delete_admin" ON public.auction_catalogs FOR DELETE TO authenticated
+  USING ((SELECT is_admin FROM public.users WHERE id = auth.uid()));
+
+CREATE POLICY "catalog_lots_insert_admin" ON public.catalog_lots FOR INSERT TO authenticated
+  WITH CHECK ((SELECT is_admin FROM public.users WHERE id = auth.uid()));
+CREATE POLICY "catalog_lots_update_admin" ON public.catalog_lots FOR UPDATE TO authenticated
+  USING ((SELECT is_admin FROM public.users WHERE id = auth.uid()));
+
+CREATE POLICY "catalog_bids_insert_authenticated" ON public.catalog_bids FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = bidder_id);
+
+-- ─────────────────────────────────────────────────────────────────
+-- NOTIFICATION PREFERENCES on users table
+-- ─────────────────────────────────────────────────────────────────
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS email_notifications  BOOLEAN DEFAULT TRUE,
+  ADD COLUMN IF NOT EXISTS notif_new_car         BOOLEAN DEFAULT TRUE,
+  ADD COLUMN IF NOT EXISTS notif_outbid          BOOLEAN DEFAULT TRUE,
+  ADD COLUMN IF NOT EXISTS preferred_lang        TEXT DEFAULT 'en' CHECK (preferred_lang IN ('en', 'ar'));
+
+-- ─────────────────────────────────────────────────────────────────
+-- Realtime publications
+-- ─────────────────────────────────────────────────────────────────
+ALTER PUBLICATION supabase_realtime ADD TABLE public.auction_catalogs;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.catalog_lots;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.catalog_bids;

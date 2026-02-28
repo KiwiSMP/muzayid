@@ -69,6 +69,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [whatsappConsent, setWhatsappConsent] = useState(true)
+  const [emailConsent, setEmailConsent] = useState(true)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -127,6 +128,9 @@ export default function RegisterPage() {
             full_name: fullName.trim(),
             phone_number: phone.replace(/\s/g, ''),
             whatsapp_alerts: whatsappConsent,
+            email_notifications: emailConsent,
+            notif_new_car: true,
+            notif_outbid: true,
             preferred_lang: 'en',
           },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
@@ -297,23 +301,45 @@ export default function RegisterPage() {
                 )}
               </div>
 
-              {/* WhatsApp consent */}
-              <label className="flex items-start gap-3 cursor-pointer bg-green-50 border border-green-200 rounded-xl p-3">
-                <input
-                  type="checkbox"
-                  checked={whatsappConsent}
-                  onChange={e => setWhatsappConsent(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-green-600 flex-shrink-0"
-                />
-                <div>
-                  <p className="text-sm font-semibold text-green-800">
-                    📱 WhatsApp Alerts · تنبيهات واتساب
-                  </p>
-                  <p className="text-xs text-green-700 mt-0.5">
-                    {tr('auth_whatsapp_consent')}
-                  </p>
-                </div>
-              </label>
+              {/* Notification consents */}
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Notifications · الإشعارات</p>
+
+                <label className="flex items-start gap-3 cursor-pointer bg-blue-50 border border-blue-200 rounded-xl p-3">
+                  <input
+                    type="checkbox"
+                    checked={emailConsent}
+                    onChange={e => setEmailConsent(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-blue-600 flex-shrink-0"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-blue-800">
+                      ✉️ Email Alerts · تنبيهات البريد
+                    </p>
+                    <p className="text-xs text-blue-700 mt-0.5">
+                      Outbid alerts, auction wins &amp; new listings — recommended
+                      <br />تنبيهات التجاوز والفوز والعربيات الجديدة — مستحسن
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 cursor-pointer bg-green-50 border border-green-200 rounded-xl p-3">
+                  <input
+                    type="checkbox"
+                    checked={whatsappConsent}
+                    onChange={e => setWhatsappConsent(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-green-600 flex-shrink-0"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-green-800">
+                      📱 WhatsApp Alerts · تنبيهات واتساب
+                    </p>
+                    <p className="text-xs text-green-700 mt-0.5">
+                      {tr('auth_whatsapp_consent')}
+                    </p>
+                  </div>
+                </label>
+              </div>
 
               {/* Terms */}
               <label className="flex items-start gap-3 cursor-pointer">

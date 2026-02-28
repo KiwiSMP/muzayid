@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useLang } from '@/i18n/LangContext'
 import {
   Gavel, Bell, ChevronDown, User, LogOut, LayoutDashboard,
-  Shield, Menu, X, Globe
+  Shield, Menu, X, Globe, Settings
 } from 'lucide-react'
 import type { UserProfile, Notification } from '@/types'
 
@@ -81,8 +81,8 @@ export default function Navbar({ initialUser }: NavbarProps) {
 
   async function handleLogout() {
     const supabase = createClient()
-    await supabase.auth.signOut()
-    window.location.href = '/'
+    await supabase.auth.signOut({ scope: 'global' })
+    window.location.replace('/')
   }
 
   async function markAllRead() {
@@ -229,6 +229,11 @@ export default function Navbar({ initialUser }: NavbarProps) {
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
                         <LayoutDashboard className="w-4 h-4 text-slate-400" />
                         {tr('nav_dashboard')}
+                      </Link>
+                      <Link href="/settings" onClick={() => setShowUser(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+                        <Settings className="w-4 h-4 text-slate-400" />
+                        {tr('nav_settings')}
                       </Link>
                       {user.is_admin && (
                         <Link href="/admin" onClick={() => setShowUser(false)}

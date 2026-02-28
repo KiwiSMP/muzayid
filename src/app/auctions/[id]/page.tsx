@@ -536,10 +536,10 @@ export default function AuctionDetailPage() {
           </div>
 
           {/* RIGHT COLUMN — Bidding */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 lg:self-start lg:sticky lg:top-24">
 
             {/* Live Bid Panel */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 sticky top-24">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">
                   {isActive ? 'Current Bid' : isDraft ? 'Starting Price' : 'Final Price'}
