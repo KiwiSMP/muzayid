@@ -48,7 +48,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
-      <Navbar initialUser={{ full_name: profile.full_name, bidding_tier: profile.bidding_tier, is_admin: profile.is_admin }} />
+      <Navbar initialUser={{ id: profile.id, full_name: profile.full_name, bidding_tier: profile.bidding_tier, is_admin: profile.is_admin }} />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-8">

@@ -37,7 +37,7 @@ async function getCurrentUser() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
-    const { data } = await supabase.from('users').select('full_name, bidding_tier').eq('id', user.id).single()
+    const { data } = await supabase.from('users').select('id, full_name, bidding_tier, is_admin').eq('id', user.id).single()
     return data
   } catch { return null }
 }

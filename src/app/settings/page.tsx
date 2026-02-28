@@ -126,7 +126,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]" dir={isRTL ? 'rtl' : 'ltr'}>
-      <Navbar initialUser={profile ? { full_name: profile.full_name, bidding_tier: profile.bidding_tier } : null} />
+      <Navbar initialUser={profile ? { id: profile.id, full_name: profile.full_name, bidding_tier: profile.bidding_tier } : null} />
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
         <div className="mb-8">
