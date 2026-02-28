@@ -110,11 +110,25 @@ function VehicleModal({ vehicle, onClose, onDeleted, onAuction }: {
   const cr = vehicle.condition_report || {}
 
   async function handleDelete() {
-    if (!confirm(`Delete ${vehicle.year} ${vehicle.make} ${vehicle.model}? This cannot be undone.`)) return
+    if (!confirm(
+      `Delete ${vehicle.year} ${vehicle.make} ${vehicle.model}?\n\n` +
+      `This will also delete any auction history for this vehicle.\n` +
+      `This cannot be undone.`
+    )) return
     setDeleting(true)
     const supabase = createClient()
     const { error } = await supabase.from('vehicles').delete().eq('id', vehicle.id)
-    if (error) { alert('Delete failed: ' + error.message); setDeleting(false); return }
+    if (error) {
+      setDeleting(false)
+      if (error.message.includes('foreign key') || error.message.includes('restrict')) {
+        alert('Cannot delete: End and settle the auction first, then try again.')
+      } else if (error.code === '42501' || error.message.includes('policy')) {
+        alert('Permission denied. Run fix_critical_bugs.sql in Supabase to add the delete policy.')
+      } else {
+        alert('Delete failed: ' + error.message)
+      }
+      return
+    }
     onClose()
     onDeleted()
   }
@@ -467,10 +481,12 @@ export default function InventoryPage() {
     const supabase = createClient()
     const { data: vData } = await supabase.from('vehicles').select('*').order('created_at', { ascending: false })
     const { data: aData } = await supabase.from('auctions').select('vehicle_id, status')
-    // Only block re-auctioning if there's an active/upcoming/draft auction — ended/settled/cancelled can be re-auctioned
+    // has_auction = true only for non-ended auctions (vehicle cannot be re-auctioned concurrently)
     const activeAuctionIds = new Set(
       (aData || [])
-        .filter((a: { vehicle_id: string; status: string }) => ['active', 'upcoming', 'draft'].includes(a.status))
+        .filter((a: { vehicle_id: string; status: string }) =>
+          !['ended', 'settled', 'cancelled'].includes(a.status)
+        )
         .map((a: { vehicle_id: string }) => a.vehicle_id)
     )
     setVehicles(((vData || []) as Vehicle[]).map(v => ({ ...v, has_auction: activeAuctionIds.has(v.id) })))
@@ -482,11 +498,31 @@ export default function InventoryPage() {
   function handleDone() { load(); setView('list') }
 
   async function handleDeleteInline(v: Vehicle) {
-    if (!confirm(`Delete ${v.year} ${v.make} ${v.model}? This cannot be undone.`)) return
+    if (!confirm(
+      `Delete ${v.year} ${v.make} ${v.model}?\n\n` +
+      `This will also delete any auction history for this vehicle.\n` +
+      `This cannot be undone.`
+    )) return
     setDeleting(v.id)
     const supabase = createClient()
-    await supabase.from('vehicles').delete().eq('id', v.id)
+    const { error } = await supabase.from('vehicles').delete().eq('id', v.id)
     setDeleting(null)
+    if (error) {
+      if (error.message.includes('violates foreign key') || error.message.includes('restrict')) {
+        alert(
+          'Cannot delete: This vehicle has bids or transactions linked to it.\n\n' +
+          'End and settle the auction first, then try deleting.'
+        )
+      } else if (error.message.includes('policy') || error.code === 'PGRST301' || error.code === '42501') {
+        alert(
+          'Permission denied. Make sure you are logged in as admin.\n\n' +
+          'If this persists, run the fix_critical_bugs.sql migration in Supabase.'
+        )
+      } else {
+        alert(`Delete failed: ${error.message}`)
+      }
+      return
+    }
     load()
   }
 

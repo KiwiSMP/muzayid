@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useLang } from '@/i18n/LangContext'
@@ -8,16 +8,36 @@ import {
   Gavel, Bell, ChevronDown, User, LogOut, LayoutDashboard,
   Shield, Menu, X, Globe, Settings
 } from 'lucide-react'
-import type { UserProfile, Notification } from '@/types'
+import type { Notification } from '@/types'
+
+interface UserState {
+  id: string
+  full_name: string
+  bidding_tier: number
+  is_admin?: boolean
+}
 
 interface NavbarProps {
-  // server-rendered user for SSR, client will hydrate
-  initialUser?: { full_name: string; bidding_tier: number; is_admin?: boolean } | null
+  // Pass the server-side user to avoid flash of unauthenticated state on SSR pages.
+  // Leave undefined/null on purely client-rendered pages.
+  initialUser?: UserState | null
 }
+
+// ─────────────────────────────────────────────────────────────────
+// KEY AUTH INSIGHT:
+// We use onAuthStateChange as the single source of truth.
+// initialUser only sets the INITIAL render value to prevent the
+// flash of "logged out" on SSR pages. Once onAuthStateChange fires
+// with INITIAL_SESSION, we always trust the session data from
+// Supabase, never the stale prop.
+// ─────────────────────────────────────────────────────────────────
 
 export default function Navbar({ initialUser }: NavbarProps) {
   const { lang, setLang, tr, isRTL } = useLang()
-  const [user, setUser] = useState(initialUser || null)
+
+  // Start with initialUser to avoid SSR flash, will be overwritten by onAuthStateChange
+  const [user, setUser] = useState<UserState | null>(initialUser ?? null)
+  const [authReady, setAuthReady] = useState(!!initialUser)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [showNotif, setShowNotif] = useState(false)
@@ -27,43 +47,53 @@ export default function Navbar({ initialUser }: NavbarProps) {
   const notifRef = useRef<HTMLDivElement>(null)
   const userRef = useRef<HTMLDivElement>(null)
 
+  const loadProfile = useCallback(async (userId: string) => {
+    const supabase = createClient()
+    const { data: profile } = await supabase
+      .from('users')
+      .select('id, full_name, bidding_tier, is_admin')
+      .eq('id', userId)
+      .single()
+    if (profile) setUser(profile as UserState)
+
+    // Load notifications in parallel
+    const { data: notifs } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    if (notifs) {
+      setNotifications(notifs)
+      setUnreadCount(notifs.filter((n: Notification) => !n.read).length)
+    }
+  }, [])
+
   useEffect(() => {
     const supabase = createClient()
 
-    // Listen for auth changes — this is the KEY fix for "loading forever"
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // On initial load, trust the server-rendered initialUser to avoid flash of logged-out state
-      if (event === 'INITIAL_SESSION' && initialUser) return
-
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('full_name, bidding_tier, is_admin')
-          .eq('id', session.user.id)
-          .single()
-        setUser(profile)
-
-        // Load notifications
-        const { data: notifs } = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .order('created_at', { ascending: false })
-          .limit(20)
-        if (notifs) {
-          setNotifications(notifs)
-          setUnreadCount(notifs.filter((n: Notification) => !n.read).length)
+    // onAuthStateChange is the ONLY reliable way to track auth state in Next.js.
+    // It fires immediately with INITIAL_SESSION on mount.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          // Always fetch fresh profile on any auth event
+          await loadProfile(session.user.id)
+        } else {
+          // Signed out — clear everything
+          setUser(null)
+          setNotifications([])
+          setUnreadCount(0)
         }
-      } else {
-        setUser(null)
-        setNotifications([])
-        setUnreadCount(0)
+        // Mark auth as resolved so we stop showing loading state
+        setAuthReady(true)
       }
-    })
+    )
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [loadProfile])
 
+  // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotif(false)
@@ -73,39 +103,51 @@ export default function Navbar({ initialUser }: NavbarProps) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // Scroll shadow
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 10)
-    window.addEventListener('scroll', handler)
+    window.addEventListener('scroll', handler, { passive: true })
     return () => window.removeEventListener('scroll', handler)
   }, [])
 
   async function handleLogout() {
     const supabase = createClient()
-    await supabase.auth.signOut({ scope: 'global' })
-    window.location.replace('/')
+    // scope: 'global' invalidates the refresh token on the server too
+    const { error } = await supabase.auth.signOut({ scope: 'global' })
+    if (!error) {
+      // Clear state immediately before redirect so there's no flash
+      setUser(null)
+      setNotifications([])
+      setUnreadCount(0)
+      // Hard redirect — not router.push — to ensure SSR re-runs with no session
+      window.location.replace('/')
+    }
   }
 
   async function markAllRead() {
     const supabase = createClient()
     const { data: { user: authUser } } = await supabase.auth.getUser()
     if (!authUser) return
-    await supabase.from('notifications').update({ read: true }).eq('user_id', authUser.id).eq('read', false)
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', authUser.id)
+      .eq('read', false)
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     setUnreadCount(0)
   }
 
   const tierBadge: Record<number, string> = {
-    0: '',
     1: 'bg-amber-100 text-amber-700',
     2: 'bg-blue-100 text-blue-700',
     3: 'bg-purple-100 text-purple-700',
   }
-  const tierLabel: Record<number, string> = {
-    0: '', 1: 'T1', 2: 'T2', 3: 'T3'
-  }
+  const tierLabel: Record<number, string> = { 1: 'T1', 2: 'T2', 3: 'T3' }
 
   return (
-    <nav className={`sticky top-0 z-50 transition-all duration-200 ${scrolled ? 'bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200' : 'bg-white border-b border-slate-200'}`}>
+    <nav className={`sticky top-0 z-50 transition-all duration-200 ${
+      scrolled ? 'bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200' : 'bg-white border-b border-slate-200'
+    }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
 
@@ -145,7 +187,11 @@ export default function Navbar({ initialUser }: NavbarProps) {
               {lang === 'en' ? 'عربي' : 'EN'}
             </button>
 
-            {user ? (
+            {/* Auth area — only render once we know auth state to avoid flicker */}
+            {!authReady ? (
+              // Thin placeholder that matches the size of the auth buttons
+              <div className="w-20 h-8 bg-slate-100 rounded-xl animate-pulse" />
+            ) : user ? (
               <>
                 {/* Notifications bell */}
                 <div ref={notifRef} className="relative">
@@ -173,18 +219,14 @@ export default function Navbar({ initialUser }: NavbarProps) {
                       </div>
                       <div className="max-h-80 overflow-y-auto">
                         {notifications.length === 0 ? (
-                          <div className="py-8 text-center text-sm text-slate-400">
-                            {tr('notif_empty')}
-                          </div>
+                          <div className="py-8 text-center text-sm text-slate-400">{tr('notif_empty')}</div>
                         ) : (
                           notifications.map(n => (
-                            <div key={n.id} className={`px-4 py-3 border-b border-slate-50 ${!n.read ? 'bg-blue-50/60' : ''}`}>
+                            <div key={n.id} className={`px-4 py-3 border-b border-slate-50 last:border-0 ${!n.read ? 'bg-blue-50/60' : ''}`}>
                               {!n.read && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full inline-block mr-2" />}
                               <p className="text-sm font-semibold text-slate-900">{n.title}</p>
                               <p className="text-xs text-slate-500 mt-0.5">{n.body}</p>
-                              <p className="text-xs text-slate-400 mt-1">
-                                {new Date(n.created_at).toLocaleDateString()}
-                              </p>
+                              <p className="text-xs text-slate-400 mt-1">{new Date(n.created_at).toLocaleDateString()}</p>
                             </div>
                           ))
                         )}
@@ -207,7 +249,7 @@ export default function Navbar({ initialUser }: NavbarProps) {
                         {user.full_name?.split(' ')[0]}
                       </span>
                       {user.bidding_tier > 0 && (
-                        <span className={`text-[10px] font-bold px-1 rounded mt-0.5 ${tierBadge[user.bidding_tier]}`}>
+                        <span className={`text-[10px] font-bold px-1 rounded mt-0.5 ${tierBadge[user.bidding_tier] || ''}`}>
                           {tierLabel[user.bidding_tier]}
                         </span>
                       )}
@@ -220,32 +262,28 @@ export default function Navbar({ initialUser }: NavbarProps) {
                       <div className="px-4 py-3 border-b border-slate-100">
                         <p className="font-semibold text-slate-900 text-sm truncate">{user.full_name}</p>
                         {user.bidding_tier > 0 && (
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tierBadge[user.bidding_tier]}`}>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tierBadge[user.bidding_tier] || ''}`}>
                             Tier {user.bidding_tier}
                           </span>
                         )}
                       </div>
                       <Link href="/dashboard" onClick={() => setShowUser(false)}
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
-                        <LayoutDashboard className="w-4 h-4 text-slate-400" />
-                        {tr('nav_dashboard')}
+                        <LayoutDashboard className="w-4 h-4 text-slate-400" />{tr('nav_dashboard')}
                       </Link>
                       <Link href="/settings" onClick={() => setShowUser(false)}
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
-                        <Settings className="w-4 h-4 text-slate-400" />
-                        {tr('nav_settings')}
+                        <Settings className="w-4 h-4 text-slate-400" />{tr('nav_settings')}
                       </Link>
                       {user.is_admin && (
                         <Link href="/admin" onClick={() => setShowUser(false)}
                           className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
-                          <Shield className="w-4 h-4 text-slate-400" />
-                          {tr('nav_admin')}
+                          <Shield className="w-4 h-4 text-slate-400" />{tr('nav_admin')}
                         </Link>
                       )}
                       <button onClick={handleLogout}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors border-t border-slate-100">
-                        <LogOut className="w-4 h-4" />
-                        {tr('nav_logout')}
+                        <LogOut className="w-4 h-4" />{tr('nav_logout')}
                       </button>
                     </div>
                   )}
@@ -295,7 +333,22 @@ export default function Navbar({ initialUser }: NavbarProps) {
               <Globe className="w-4 h-4" />
               {lang === 'en' ? 'عربي' : 'English'}
             </button>
-            {!user && (
+            {user ? (
+              <>
+                <Link href="/dashboard" onClick={() => setShowMobile(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-lg">
+                  <LayoutDashboard className="w-4 h-4" />{tr('nav_dashboard')}
+                </Link>
+                <Link href="/settings" onClick={() => setShowMobile(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-lg">
+                  <Settings className="w-4 h-4" />{tr('nav_settings')}
+                </Link>
+                <button onClick={handleLogout}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg w-full">
+                  <LogOut className="w-4 h-4" />{tr('nav_logout')}
+                </button>
+              </>
+            ) : (
               <div className="pt-2 flex gap-2">
                 <Link href="/auth/login" onClick={() => setShowMobile(false)}
                   className="flex-1 text-center text-sm font-semibold text-slate-700 py-2 border border-slate-200 rounded-xl">
@@ -306,13 +359,6 @@ export default function Navbar({ initialUser }: NavbarProps) {
                   {tr('nav_register')}
                 </Link>
               </div>
-            )}
-            {user && (
-              <button onClick={handleLogout}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg w-full">
-                <LogOut className="w-4 h-4" />
-                {tr('nav_logout')}
-              </button>
             )}
           </div>
         )}

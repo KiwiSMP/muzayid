@@ -56,7 +56,7 @@ export default function LiveControlPage() {
     const { data } = await supabase
       .from('auctions')
       .select('*, vehicle:vehicles(make, model, year, images, damage_type, mileage, condition_report)')
-      .in('status', ['draft', 'active', 'ended'])
+      .in('status', ['draft', 'active', 'ended', 'settled', 'upcoming', 'cancelled'])
       .order('start_time', { ascending: true })
     setAuctions((data || []) as Auction[])
     // Auto-select first active, else first draft
@@ -292,6 +292,27 @@ export default function LiveControlPage() {
                       className="col-span-2 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl text-base transition-colors shadow-sm">
                       {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                       Mark as Settled (Payment Received)
+                    </button>
+                  )}
+                  {selected.status === 'settled' && (
+                    <div className="col-span-2 bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-sm text-purple-700 font-semibold text-center">
+                      ✓ Auction settled — vehicle sold. You can now re-auction this vehicle.
+                    </div>
+                  )}
+                  {selected.status === 'cancelled' && (
+                    <div className="col-span-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-500 font-semibold text-center">
+                      Auction cancelled — vehicle can be re-auctioned.
+                    </div>
+                  )}
+                  {['draft', 'active', 'upcoming'].includes(selected.status) && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Cancel this auction? Bidders will be notified. The vehicle can be re-auctioned.')) return
+                        await setStatus('cancelled')
+                      }}
+                      disabled={processing}
+                      className="col-span-2 flex items-center justify-center gap-2 bg-white hover:bg-red-50 border border-red-200 text-red-600 font-bold py-3 rounded-xl text-sm transition-colors mt-1">
+                      Cancel Auction
                     </button>
                   )}
                 </div>

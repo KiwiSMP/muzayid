@@ -70,16 +70,18 @@ function CreateAuctionForm() {
     async function load() {
       const supabase = createClient()
       const { data: vData } = await supabase.from('vehicles').select('*').eq('status', 'approved').order('created_at', { ascending: false })
-      // Only exclude vehicles with ACTIVE auctions (not ended/cancelled/settled ones)
+      // Only exclude vehicles that currently have an active/draft/upcoming auction.
+      // ended, settled, cancelled → vehicle is available to re-auction.
       const { data: aData } = await supabase.from('auctions').select('vehicle_id, status')
-      const activeAuctionIds = new Set(
+      const blockedIds = new Set(
         (aData || [])
-          .filter((a: { vehicle_id: string; status: string }) => ['active', 'upcoming', 'draft'].includes(a.status))
+          .filter((a: { vehicle_id: string; status: string }) =>
+            !['ended', 'settled', 'cancelled'].includes(a.status)
+          )
           .map((a: { vehicle_id: string }) => a.vehicle_id)
       )
-      const available = ((vData || []) as Vehicle[]).filter(v => !activeAuctionIds.has(v.id))
+      const available = ((vData || []) as Vehicle[]).filter(v => !blockedIds.has(v.id))
       setVehicles(available)
-      // If preselected vehicle isn't in available list, still allow it (might have ended auction)
       setLoading(false)
     }
     load()
@@ -98,16 +100,20 @@ function CreateAuctionForm() {
     setSubmitting(true); setError('')
     const supabase = createClient()
 
-    // Check if there's already an active/draft auction for this vehicle
+    // Only block if there is a CONCURRENT (non-ended) auction for this vehicle.
+    // After running the DB migration, ended/settled vehicles CAN be re-auctioned.
     const { data: existing } = await supabase
       .from('auctions')
       .select('id, status')
       .eq('vehicle_id', selectedId)
-      .in('status', ['active', 'upcoming', 'draft'])
+      .not('status', 'in', '(ended,settled,cancelled)')
       .maybeSingle()
 
     if (existing) {
-      setError(`This vehicle already has a ${existing.status} auction. End or cancel it first before creating a new one.`)
+      setError(
+        `This vehicle has a ${existing.status} auction. ` +
+        `Go to Live Control to end or cancel it first.`
+      )
       setSubmitting(false)
       return
     }
@@ -122,11 +128,15 @@ function CreateAuctionForm() {
       status: form.status,
     })
     if (err) {
-      // Handle the unique constraint violation with a clear message
       if (err.message.includes('unique') || err.message.includes('duplicate')) {
-        setError('This vehicle already has an auction. Go to Live Control to manage or cancel the existing auction first.')
+        setError(
+          'A concurrent auction already exists for this vehicle. ' +
+          'Open Live Control, check all statuses, and cancel it first.'
+        )
+      } else if (err.message.includes('duration')) {
+        setError('Invalid auction duration. Please check start and end times.')
       } else {
-        setError(err.message)
+        setError(`Failed to create: ${err.message}`)
       }
       setSubmitting(false)
       return

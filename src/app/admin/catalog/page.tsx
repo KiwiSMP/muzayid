@@ -36,10 +36,15 @@ interface Bid {
 
 function formatCurrency(n: number) { return n.toLocaleString('en-EG') + ' EGP' }
 
-function Toast({ msg }: { msg: string }) {
+function Toast({ msg, onDismiss }: { msg: string; onDismiss: () => void }) {
+  const isError = msg.startsWith('Error:') || msg.startsWith('Catalog created but')
   return (
-    <div className="fixed top-6 right-6 z-50 flex items-center gap-2 bg-slate-900 text-white px-4 py-3 rounded-xl font-semibold text-sm shadow-xl border border-slate-700">
-      <CheckCircle2 className="w-4 h-4 text-emerald-400" />{msg}
+    <div
+      onClick={onDismiss}
+      className={`fixed top-6 right-6 z-50 flex items-start gap-2 px-4 py-3 rounded-xl font-semibold text-sm shadow-xl cursor-pointer max-w-sm ${isError ? 'bg-red-600 text-white border border-red-500' : 'bg-slate-900 text-white border border-slate-700'}`}
+    >
+      {isError ? <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-200" /> : <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-400" />}
+      <span className="break-words">{msg}</span>
     </div>
   )
 }
@@ -78,7 +83,7 @@ export default function AdminCatalogPage() {
   const activeLot = lots.find(l => l.status === 'active')
   const activeBid = activeLot ? Math.max(activeLot.current_bid, activeLot.starting_price) : 0
 
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000) }
+  function showToast(msg: string, duration = 4000) { setToast(msg); setTimeout(() => setToast(null), duration) }
 
   const loadCatalogs = useCallback(async () => {
     const supabase = createClient()
@@ -153,7 +158,7 @@ export default function AdminCatalogPage() {
       status: 'scheduled', current_lot_order: 1,
     }).select().single()
 
-    if (error || !catalog) { showToast('Failed to create catalog'); setProcessing(false); return }
+    if (error || !catalog) { showToast(`Error: ${error?.message || 'No data returned'}`); setProcessing(false); return }
 
     // Insert lots in order
     const lotInserts = selectedVehicleIds.map((vid, i) => ({
@@ -161,7 +166,8 @@ export default function AdminCatalogPage() {
       status: 'pending', current_bid: 0, highest_bidder_id: null,
       starting_price: parseInt(newStartingPrices[vid] || '1000'),
     }))
-    await supabase.from('catalog_lots').insert(lotInserts)
+    const { error: lotsError } = await supabase.from('catalog_lots').insert(lotInserts)
+    if (lotsError) { showToast(`Catalog created but lots failed: ${lotsError.message}`, 6000); setProcessing(false); return }
 
     showToast('Catalog created!')
     setSelectedCatalogId(catalog.id)
@@ -242,7 +248,7 @@ export default function AdminCatalogPage() {
 
   return (
     <div className="p-8">
-      {toast && <Toast msg={toast} />}
+      {toast && <Toast msg={toast} onDismiss={() => setToast(null)} />}
 
       <div className="flex items-center justify-between mb-6">
         <div>

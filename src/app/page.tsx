@@ -176,7 +176,7 @@ export default async function HomePage() {
           <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-white/10">
             {[
               { icon: Gavel, value: liveAuctions.length.toString(), label: 'Live Auctions · مزادات حية' },
-              { icon: TrendingUp, value: stats.total_vehicles?.toString() || '—', label: 'Vehicles Listed · سيارة مدرجة' },
+              { icon: TrendingUp, value: stats.total_vehicles?.toString() || '—', label: 'Approved Vehicles · سيارات متاحة' },
               { icon: Users, value: stats.active_bidders?.toString() || '—', label: 'Active Bidders · مزايد نشط' },
               { icon: Clock, value: '5–7', label: 'Avg. Days Per Auction · أيام متوسط المزاد' },
             ].map(({ icon: Icon, value, label }) => (
