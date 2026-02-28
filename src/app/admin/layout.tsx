@@ -18,6 +18,15 @@ interface AdminBadges {
   pendingVehicles: number
 }
 
+interface NavItem {
+  href: string
+  label: string
+  icon: React.ElementType
+  badge?: number
+  exact?: boolean
+  live?: boolean
+}
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [checking, setChecking] = useState(true)
@@ -63,7 +72,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => clearInterval(interval)
   }, [loadBadges])
 
-  const NAV_GROUPS = [
+  const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     {
       label: 'Operations',
       items: [
